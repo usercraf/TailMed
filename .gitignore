@@ -1,5 +1,6 @@
 .venv/
 .idea/
+__pycach__/
 
 key_file.py
 
