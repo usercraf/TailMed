@@ -21,7 +21,8 @@ def get_admin_buttons():
         'del_doctor': '🤷 Видалити лікаря',
     }
 
-async def show_main_menu(user_id: int, user_name: str, reply_func):
+async def show_main_menu(user_id: int, user_name: str, reply_func, state: FSMContext):
+    await state.clear()
     admin_id = cur.execute("""SELECT full_name, role, is_verified FROM users WHERE telegram_id =?""", (user_id,)).fetchone()
     builder = InlineKeyboardBuilder()
     if admin_id is not None:
@@ -45,7 +46,7 @@ async def show_main_menu(user_id: int, user_name: str, reply_func):
 
 
 @dp.message(Command("start"))
-async def handle_start(message: types.Message):
+async def handle_start(message: types.Message, state: FSMContext):
     await show_main_menu(
         user_id=message.from_user.id,
         user_name=message.from_user.first_name,
