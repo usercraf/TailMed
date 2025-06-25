@@ -1,15 +1,15 @@
 import asyncio
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters.command import CommandStart, Command
+from aiogram.filters.command import Command
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import StatesGroup, State
 
 from key_file import TOKEN
 from log_file import logger
 from key_file import cur, base
 from admin_file import admin_router
+from user_file import user_router
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -42,7 +42,8 @@ async def show_main_menu(user_id: int, user_name: str, reply_func, state: FSMCon
 
     else:
         logger.info(f"Користувач {user_name} (ID: {user_id}) увійшов як користувач")
-        await reply_func(f'👋 Вітаю Вас {user_name}. Давай почнемо')
+        builder.add(InlineKeyboardButton(text='✍🏻 Запис до лікаря', callback_data='record_to_doctor'))
+        await reply_func(f'👋 Вітаю Вас {user_name}. Давай почнемо', reply_markup=builder.as_markup())
 
 
 @dp.message(Command("start"))
@@ -50,21 +51,24 @@ async def handle_start(message: types.Message, state: FSMContext):
     await show_main_menu(
         user_id=message.from_user.id,
         user_name=message.from_user.first_name,
-        reply_func=message.answer
+        reply_func=message.answer,
+        state=state
     )
 
 @dp.callback_query(F.data == 'Home')
-async def handle_home(callback: types.CallbackQuery):
+async def handle_home(callback: types.CallbackQuery, state: FSMContext):
     await show_main_menu(
         user_id=callback.from_user.id,
         user_name=callback.from_user.first_name,
-        reply_func=callback.message.answer
+        reply_func=callback.message.answer,
+        state=state
     )
     await callback.answer()
 
 # Запуск процесса поллинга новых апдейтов
 async def main():
     dp.include_router(admin_router)
+    dp.include_router(user_router)
     print('Bot run')
     await dp.start_polling(bot)
 
