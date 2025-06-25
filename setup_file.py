@@ -7,9 +7,10 @@ from aiogram.fsm.context import FSMContext
 
 from key_file import TOKEN
 from log_file import logger
-from key_file import cur, base
+from key_file import cur
 from admin_file import admin_router
 from user_file import user_router
+from doctor_file import doctor_router
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -35,7 +36,7 @@ async def show_main_menu(user_id: int, user_name: str, reply_func, state: FSMCon
             await reply_func(f'👨🏻‍💼 {full_name}, давай почнемо', reply_markup=builder.as_markup())
 
         elif role == 'doctor' and verified:
-            builder.add(InlineKeyboardButton(text='🩺 Меню лікаря', callback_data='doc_'))
+            builder.add(InlineKeyboardButton(text='🩺 Меню лікаря', callback_data='doc_meny'))
             builder.adjust(1)
             logger.info(f"Користувач {user_name} (ID: {user_id}) увійшов як лікар")
             await reply_func(f'👨‍⚕️ Вітаю лікарю {full_name}, що будемо робити?', reply_markup=builder.as_markup())
@@ -69,6 +70,7 @@ async def handle_home(callback: types.CallbackQuery, state: FSMContext):
 async def main():
     dp.include_router(admin_router)
     dp.include_router(user_router)
+    dp.include_router(doctor_router)
     print('Bot run')
     await dp.start_polling(bot)
 
