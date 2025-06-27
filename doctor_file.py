@@ -42,13 +42,6 @@ def get_home_builder() -> InlineKeyboardBuilder:
     builder.adjust(1)
     return builder
 
-def check_msg(func, msg):
-    if len(msg) > 0:
-        return True
-    else:
-        logger.error(f'Введені дані порожні у функції {func}')
-        return False
-
 def is_valid_phone_number(phone: str) -> bool:
     return bool(re.fullmatch(r"0\d{9}", phone))
 
@@ -135,49 +128,31 @@ async def create_a_record(callback: types.CallbackQuery, state: FSMContext):
 
 @doctor_router.message(AddPets.pets_name)
 async def record_pets_name(message: types.Message, state: FSMContext):
-    if check_msg(record_pets_name, message.text.strip()):
-        await state.update_data(name_pets=message.text.strip())
-        await message.answer('Введіть вид тваринки (🐈 🐕 🐍 🐎 🦜)', reply_markup=get_home_builder().as_markup())
-        await state.set_state(AddPets.species)
-    else:
-        logger.error(f'Лікар {message.from_user.id} не ввів кличку тварини')
-        await message.answer('❌ Ви відправили порожнє повідомлення спробуйте ще раз.', reply_markup=get_home_builder().as_markup())
-        await state.set_state(AddPets.pets_name)
+    await state.update_data(name_pets=message.text.strip())
+    await message.answer('Введіть вид тваринки (🐈 🐕 🐍 🐎 🦜)', reply_markup=get_home_builder().as_markup())
+    await state.set_state(AddPets.species)
 
 
 @doctor_router.message(AddPets.species)
 async def record_species(message: types.Message, state: FSMContext):
-    if check_msg(record_species, message.text.strip()):
-        await state.update_data(species=message.text.strip())
-        await message.answer('⬇️ Введіть породу тваринки', reply_markup=get_home_builder().as_markup())
-        await state.set_state(AddPets.bread)
-    else:
-        logger.error(f'Лікар {message.from_user.id} не ввів вид тварини')
-        await message.answer('❌ Ви відправили порожнє повідомлення спробуйте ще раз.', reply_markup=get_home_builder().as_markup())
-        await state.set_state(AddPets.species)
+    await state.update_data(species=message.text.strip())
+    await message.answer('⬇️ Введіть породу тваринки', reply_markup=get_home_builder().as_markup())
+    await state.set_state(AddPets.bread)
 
 
 @doctor_router.message(AddPets.bread)
 async def record_bread(message: types.Message, state: FSMContext):
-    if check_msg(record_bread, message.text.strip()):
-        await state.update_data(breed=message.text.strip())
-        await message.answer('⬇️ Введіть ім\ʼя господаря.', reply_markup=get_home_builder().as_markup())
-        await state.set_state(AddPets.owner_name)
-    else:
-        logger.error(f'Лікар {message.from_user.id} не ввів породу тварини')
-        await message.answer('❌ Ви відправили порожнє повідомлення спробуйте ще раз.', reply_markup=get_home_builder().as_markup())
-        await state.set_state(AddPets.bread)
+    await state.update_data(breed=message.text.strip())
+    await message.answer('⬇️ Введіть ім\ʼя господаря.', reply_markup=get_home_builder().as_markup())
+    await state.set_state(AddPets.owner_name)
+
 
 @doctor_router.message(AddPets.owner_name)
 async def record_bread(message: types.Message, state: FSMContext):
-    if check_msg(record_bread, message.text.strip()):
-        await state.update_data(owner_name=message.text.strip())
-        await message.answer('⬇️ Введіть номер телефону господаря у форматі 0950000000.', reply_markup=get_home_builder().as_markup())
-        await state.set_state(AddPets.owner_phone)
-    else:
-        logger.error(f'Лікар {message.from_user.id} не ім\ʼя господаря тварини')
-        await message.answer('❌ Ви відправили порожнє повідомлення спробуйте ще раз.', reply_markup=get_home_builder().as_markup())
-        await state.set_state(AddPets.owner_name)
+    await state.update_data(owner_name=message.text.strip())
+    await message.answer('⬇️ Введіть номер телефону господаря у форматі 0950000000.', reply_markup=get_home_builder().as_markup())
+    await state.set_state(AddPets.owner_phone)
+
 
 @doctor_router.message(AddPets.owner_phone)
 async def record_to_table(message: types.Message, state: FSMContext):
