@@ -1,5 +1,6 @@
 import asyncio
 from aiogram import Bot, Dispatcher, types, F
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters.command import Command
 from aiogram.types import InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -11,6 +12,7 @@ from key_file import cur
 from admin_file import admin_router
 from user_file import user_router
 from doctor_file import doctor_router
+from test_file import test_router
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -71,8 +73,20 @@ async def main():
     dp.include_router(admin_router)
     dp.include_router(user_router)
     dp.include_router(doctor_router)
-    print('Bot run')
-    await dp.start_polling(bot)
+    dp.include_router(test_router)
+
+    tryings = 0
+    while True:
+        try:
+            print("🚀 Bot run")
+            await dp.start_polling(bot)
+        except TelegramNetworkError as e:
+            tryings += 1
+            logger.warning(f"⚠️ TelegramNetworkError: {e}. Спроба №{tryings}")
+            await asyncio.sleep(1.0 * tryings)
+        except Exception as e:
+            logger.exception(f"💥 Невідома помилка polling: {e}")
+            await asyncio.sleep(5)
 
 if __name__ == "__main__":
     asyncio.run(main())
