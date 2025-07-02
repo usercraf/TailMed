@@ -1,6 +1,8 @@
+from datetime import datetime
+
 from aiogram import types, F, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import InlineKeyboardButton
+from aiogram.types import InlineKeyboardButton, FSInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -9,6 +11,7 @@ import re
 from key_file import cur, base
 from log_file import logger
 from key_file import all_time
+from doc_form import generate_tailmed_docx
 
 doctor_router = Router()
 
@@ -22,11 +25,30 @@ class AddPets(StatesGroup):
     owner_name = State()
     owner_phone = State()
 
+class CheckPets(StatesGroup):
+    check_pets = State()
+
+class MedicalRecording(StatesGroup):
+    get_owner_number = State()
+    use_pets = State()
+    get_category = State()
+    get_date = State()
+    get_title = State()
+    get_details = State()
+
 def get_doctor_buttons():
     return {
         'set_time': '⏳ Визначити час прийому',
-        'add_pets': '🐶 Додати тваринку'
+        'add_pets': '🐶 Додати тваринку',
+        'check_pets': '✅ Перевірити тваринку',
+        'medical_record': '🧬 Медичний запис'
     }
+
+def category_record():
+    return  {"review": "огляд",
+             "analysis": "аналіз",
+             "procedure": "процедура",
+             "recommendation": "рекомендація"}
 
 def doc_name(name):
     try:
@@ -50,6 +72,7 @@ async def meny_doctor(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     for key, value in get_doctor_buttons().items():
         builder.add(InlineKeyboardButton(text=value, callback_data=key))
+    builder.adjust(1)
     await callback.message.answer(f'😀 Вітаємо {doc_name(callback.from_user.id)} виберіть пункт меню.', reply_markup=builder.as_markup())
 
 
@@ -190,4 +213,199 @@ async def record_to_table(message: types.Message, state: FSMContext):
         await message.answer('❌ Номер телефону введено не у визначеному форматі. Перевірте та введіть ще раз.',
                              reply_markup=get_home_builder().as_markup())
         await state.set_state(AddPets.owner_phone)
+
+
+@doctor_router.callback_query(F.data == 'check_pets')
+async def get_number_owner(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_text('⬇️ Введіть номер телефону', reply_markup=get_home_builder().as_markup())
+    await state.set_state(CheckPets.check_pets)
+
+
+@doctor_router.message(CheckPets.check_pets)
+async def owner_pets(message: types.Message, state: FSMContext):
+    if is_valid_phone_number(message.text.strip()):
+        try:
+            date_pets = cur.execute("""SELECT * FROM animals WHERE owner_phone=?""", (message.text.strip(),)).fetchall()
+            for item in date_pets:
+                id_pets, name_pets, species, breed, owner_name, owner_phone = item
+                await message.answer(f'📣 Данні по тваринці: '
+                                     f'\n1️⃣ID Номер-{id_pets}'
+                                     f'\n2️⃣Імʼя тваринки-{name_pets}'
+                                     f'\n3️⃣Вид-{species}'
+                                     f'\n4️⃣Порода-{breed}'
+                                     f'\n5️⃣Імʼя власника-{owner_name}'
+                                     f'\n6️⃣Телефон власника-{owner_phone}.')
+            logger.info('Данні по тваринці отримані.')
+            await message.answer('Виберіть подільші діі', reply_markup=get_home_builder().as_markup())
+            await state.clear()
+        except Exception as e:
+            logger.error(
+                f'Виникла проблема під час перевірки наявності тваринки у базі даних функція owner_pets {e}')
+            await message.answer(
+                '❌ Виникла помилка. Спробуйте пізніше або зверніться до адміністратора',
+                reply_markup=get_home_builder().as_markup())
+            await message.answer('❌ Введені дані очищено спробуйте ще раз або зверніться до адміністратора',
+                                 reply_markup=get_home_builder().as_markup())
+            await state.clear()
+    else:
+        logger.info('Жодного запису не знайдено')
+        await message.answer('🙊 Жодного запису не знайдено', reply_markup=get_home_builder().as_markup())
+        await state.clear()
+
+
+@doctor_router.callback_query(F.data == 'medical_record')
+async def medical_recording(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_text('⬇️ Для внесення медичних рекомендацій введіть номер телефону власника.',
+                                     reply_markup=get_home_builder().as_markup())
+    await state.set_state(MedicalRecording.get_owner_number)
+
+@doctor_router.message(MedicalRecording.get_owner_number)
+async def check_owner_number(message: types.Message, state: FSMContext):
+    if is_valid_phone_number(message.text.strip()):
+        await state.update_data(owner_phone=message.text.strip())
+        try:
+            date_pets = cur.execute("""SELECT * FROM animals WHERE owner_phone=?""", (message.text.strip(),)).fetchall()
+            for item in date_pets:
+                builder = InlineKeyboardBuilder()
+                id_pets, name_pets, species, breed, owner_name, owner_phone = item
+                builder.add(types.InlineKeyboardButton(text='Вибрати', callback_data=f'mr_{id_pets}'))
+                await message.answer(f'📣 Данні по тваринці: '
+                                     f'\n1️⃣ID Номер-{id_pets}'
+                                     f'\n2️⃣Імʼя тваринки-{name_pets}'
+                                     f'\n3️⃣Вид-{species}'
+                                     f'\n4️⃣Порода-{breed}'
+                                     f'\n5️⃣Імʼя власника-{owner_name}'
+                                     f'\n6️⃣Телефон власника-{owner_phone}.', reply_markup=builder.as_markup())
+
+            logger.info('Данні по тваринці отримані.')
+            await state.set_state(MedicalRecording.use_pets)
+        except Exception as e:
+            logger.error(
+                f'Виникла проблема під час перевірки наявності тваринки у базі даних функція owner_pets {e}')
+            await message.answer(
+                '❌ Виникла помилка. Спробуйте пізніше або зверніться до адміністратора',
+                reply_markup=get_home_builder().as_markup())
+            await message.answer('❌ Введені дані очищено спробуйте ще раз або зверніться до адміністратора',
+                                 reply_markup=get_home_builder().as_markup())
+            await state.clear()
+    else:
+        logger.info('Жодного запису не знайдено')
+        await message.answer('🙊 Жодного запису не знайдено', reply_markup=get_home_builder().as_markup())
+        await state.clear()
+
+
+@doctor_router.callback_query(MedicalRecording.use_pets, F.data.startswith('mr_'))
+async def use_pets(callback: types.CallbackQuery, state: FSMContext):
+    await state.update_data(animal_id=callback.data.split('_')[1])
+    builder = InlineKeyboardBuilder()
+    for key, value in category_record().items():
+        builder.add(types.InlineKeyboardButton(text=value, callback_data=key))
+    builder.add(types.InlineKeyboardButton(text="🏠 На головну", callback_data="Home"))
+    builder.adjust(1)
+    await callback.message.answer('⬇️ Виберіть категорію', reply_markup=builder.as_markup())
+    await state.set_state(MedicalRecording.get_category)
+
+
+@doctor_router.callback_query(MedicalRecording.get_category, F.data.in_(category_record().keys()))
+async def title_record(callback: types.CallbackQuery, state: FSMContext):
+    await state.update_data(category=category_record()[callback.data])
+    if category_record()[callback.data] in ('аналіз', 'процедура'):
+        await callback.message.answer('⬇️ Введіть дату прийому аналізів або проведення процедури.')
+        await state.set_state(MedicalRecording.get_date)
+    else:
+        await callback.message.answer('⬇️ Ведіть Назву/тему запису, наприклад - УЗД черевної порожнини',
+                                      reply_markup=get_home_builder().as_markup())
+        await state.set_state(MedicalRecording.get_title)
+
+
+@doctor_router.message(MedicalRecording.get_date)
+async def get_date(message: types.Message, state: FSMContext):
+    logger.info('Виконано вхід до роутеру з введенням дати аналізів чи процедури.')
+    await state.update_data(date=message.text)
+    await message.answer('⬇️ Ведіть Назву/тему запису, наприклад - УЗД черевної порожнини',
+                                  reply_markup=get_home_builder().as_markup())
+    await state.set_state(MedicalRecording.get_title)
+
+
+@doctor_router.message(MedicalRecording.get_title)
+async def title(message: types.Message, state: FSMContext):
+    await state.update_data(title=message.text.strip())
+    builder = InlineKeyboardBuilder()
+    builder.add(types.InlineKeyboardButton(text='Далі', callback_data='Next'))
+    await message.answer('⬇️ Введіть Опис результатів / що було зроблено або натисніть Далі', reply_markup=builder.as_markup())
+    await state.set_state(MedicalRecording.get_details)
+
+
+@doctor_router.message(MedicalRecording.get_details)
+async def details_msg(message: types.Message, state: FSMContext):
+    logger.info('Лікарем внесенні деталі процедури спрацювала функція details_msg')
+    data_mr = await state.get_data()
+    if data_mr.get('date'):
+        date = data_mr.get('date')
+    else:
+        date = 'Не вказано лікарем'
+    owner_phone = data_mr.get('owner_phone')
+    pets_name, species, breed, owner_name = cur.execute("""SELECT name_pets, species, breed, owner_name FROM animals WHERE id_pets = ?""",
+                              (data_mr.get('animal_id'),)).fetchone()
+
+    animal_id = data_mr.get('animal_id')
+    category = data_mr.get('category')
+    tittle = data_mr.get('title')
+    details = message.text
+    doctor_name = cur.execute("""SELECT full_name FROM users WHERE telegram_id = ?""", (message.from_user.id,)).fetchone()[0]
+    now = datetime.now()
+    create_at = now.strftime("%Y-%m-%d %H:%M")
+    try:
+        cur.execute("""INSERT INTO medical_records (animal_id, date, category, title, details, doc_name, created_at) 
+                            VALUES (?,?,?,?,?,?,?)""", (animal_id, date, category, tittle, details, doctor_name, create_at))
+        base.commit()
+        logger.info(f'Данні занесені в базу даних лікарем {doctor_name} o {create_at}')
+        await message.answer('Запис Внесено до бази даних.\nНадсилаю файл.', reply_markup=get_home_builder().as_markup())
+
+
+        generate_tailmed_docx(data_mr, "output/report_tailmed.docx",
+                              doctor_name, details, category, pets_name, species, breed, owner_name, owner_phone, create_at)
+
+        file = FSInputFile("output/report_tailmed.docx")
+        await message.answer_document(file, caption="📄 Ваш TailMed звіт у форматі DOCX")
+
+        await state.clear()
+    except Exception as e:
+        logger.warning(f'Відбулась проблема з записом до бази даних {e} функція details_msg')
+        await message.answer('❌ Відбулась помилка зверніться до адміністратора', reply_markup=get_home_builder().as_markup())
+        await state.clear()
+
+
+@doctor_router.callback_query(MedicalRecording.get_details, F.data == 'Next')
+async def details_callback(callback: types.CallbackQuery, state: FSMContext):
+    data_mr = await state.get_data()
+    if data_mr.get('date'):
+        date = data_mr.get('date')
+    else:
+        date = 'Не вказано лікарем'
+    owner_phone = data_mr.get('owner_phone')
+    animal_id = data_mr.get('animal_id')
+    category = data_mr.get('category')
+    tittle = data_mr.get('title')
+    details = 'Лікар не вніс деталі'
+    doctor_name = cur.execute("""SELECT full_name FROM users WHERE telegram_id = ?""", (callback.from_user.id,)).fetchone()[0]
+    now = datetime.now()
+    create_at = now.strftime("%Y-%m-%d %H:%M")
+    try:
+        cur.execute("""INSERT INTO medical_records (animal_id, date, category, title, details, doc_name, created_at) 
+                            VALUES (?,?,?,?,?,?,?)""", (animal_id, date, category, tittle, details, doctor_name, create_at))
+        base.commit()
+        logger.info(f'Данні занесені в базу даних лікарем {doctor_name} o {create_at}')
+        await callback.message.answer('Запис Внесено до бази даних.\nНадсилаю файл.',
+                                      reply_markup=get_home_builder().as_markup())
+        await state.clear()
+    except Exception as e:
+        logger.warning(f'Відбулась проблема з записом до бази даних {e} функція details_msg')
+        await callback.message.answer('❌ Відбулась помилка зверніться до адміністратора.',
+                                      reply_markup=get_home_builder().as_markup())
+        await state.clear()
+
+
+
+
 
